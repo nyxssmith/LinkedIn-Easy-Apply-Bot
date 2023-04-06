@@ -1,0 +1,29 @@
+version: "3"
+services:
+  bot:
+    image: linkedineasyapply
+    build: .
+    volumes:
+      - /home/nyx/Git/LinkedIn-Easy-Apply-Bot/uploads:/app/uploads
+      - /home/nyx/Git/LinkedIn-Easy-Apply-Bot/output:/app/output
+    depends_on:
+      - chrome
+    ports:
+      - 5678
+
+  chrome:
+    image: selenium/standalone-chrome:106.0
+    shm_size: 2gb
+    environment:
+      - SE_EVENT_BUS_PUBLISH_PORT=4442
+      - SE_EVENT_BUS_SUBSCRIBE_PORT=4443
+      - SE_NODE_OVERRIDE_MAX_SESSIONS=true
+      - SE_NODE_MAX_SESSIONS=4
+      - VNC_NO_PASSWORD=1
+    ports:
+      - 4442
+      - 4443
+      - 4444
+      - 7900
+
+

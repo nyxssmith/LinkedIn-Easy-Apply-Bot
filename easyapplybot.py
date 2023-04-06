@@ -1,7 +1,19 @@
+
+from __future__ import annotations
+
 import time, random, os, csv, platform
 import logging
+log = logging.getLogger(__name__)
+
+
+# debug inside container with compose
+import debugpy
+debugpy.listen(("0.0.0.0", 5678))
+log.info("Waiting for client to attach...")
+debugpy.wait_for_client()
+
+
 from selenium import webdriver
-from future import annotations
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.keys import Keys
@@ -11,7 +23,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from bs4 import BeautifulSoup
 import pandas as pd
-import pyautogui
+
+#import pyautogui
 
 from urllib.request import urlopen
 from webdriver_manager.chrome import ChromeDriverManager
@@ -19,8 +32,34 @@ import re
 import yaml
 from datetime import datetime, timedelta
 
-log = logging.getLogger(__name__)
-driver = webdriver.Chrome(ChromeDriverManager().install())
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.keys import Keys
+
+
+from selenium.common.exceptions import NoSuchElementException
+
+
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import Select
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+
+# wait for chrome
+for i in range(10):
+    time.sleep(1)
+    print(i)
+
+
+# new compose driver
+options = webdriver.ChromeOptions()
+options.add_argument('--ignore-ssl-errors=yes')
+options.add_argument('--ignore-certificate-errors')
+driver = webdriver.Remote(
+command_executor='http://chrome:4444/wd/hub',options=options)
+
+# orig driver
+#driver = webdriver.Chrome(ChromeDriverManager().install())
 
 
 def setupLogger() -> None:
@@ -317,10 +356,11 @@ class EasyApplyBot:
 
 
 
-        input_field = self.browser.find_element("xpath", "//input[contains(@name,'phoneNumber')]")
+        #input_field = self.browser.find_element("xpath", "//input[contains(@name,'phoneNumber')]")
+        #
+        try:
+            input_field = self.browser.find_element("xpath", "//input[contains(@name,'phoneNumber')]")
 
-
-        if input_field:
             input_field.clear()
             input_field.send_keys(self.phone_number)
             time.sleep(random.uniform(4.5, 6.5))
@@ -352,11 +392,9 @@ class EasyApplyBot:
                 # if i != 2:
                 #     break
 
-
-
-        else:
-            log.debug(f"Could not find phone number field")
-                
+        except NoSuchElementException:
+            log.error("Couldnt find phonenumber")
+ 
 
 
     def send_resume(self) -> bool:
@@ -375,7 +413,12 @@ class EasyApplyBot:
             submit_application_locator = (By.CSS_SELECTOR,
                                           "button[aria-label='Submit application']")
             error_locator = (By.CSS_SELECTOR,
-                             "p[data-test-form-element-error-message='true']")
+                             "p[data-test-form-element-error-message]")
+            error_locator = (By.XPATH,
+                             "//*[text()='valid answer']")
+            #data-test-form-element-error-messages
+            #WebElement e = driver.findElement(By.xpath("//*[text()='Get started free']"));
+            
             upload_locator = (By.CSS_SELECTOR, "input[name='file']")
             follow_locator = (By.CSS_SELECTOR, "label[for='follow-company-checkbox']")
 
@@ -383,7 +426,9 @@ class EasyApplyBot:
             while True:
 
                 # Upload Cover Letter if possible
-                if is_present(upload_locator):
+                #if is_present(upload_locator):
+                # disable upload for now
+                if False:
 
                     input_buttons = self.browser.find_elements(upload_locator[0],
                                                                upload_locator[1])
@@ -409,9 +454,11 @@ class EasyApplyBot:
                         button: None = self.wait.until(EC.element_to_be_clickable(button_locator))
 
                     if is_present(error_locator):
+                        log.info(f"error locator found")
                         for element in self.browser.find_elements(error_locator[0],
                                                                   error_locator[1]):
                             text = element.text
+                            log.info(f"error text is {text}")
                             if "Please enter a valid answer" in text:
                                 button = None
                                 break
@@ -428,13 +475,16 @@ class EasyApplyBot:
                 elif submitted:
                     log.info("Application Submitted")
                     break
-
-            time.sleep(random.uniform(1.5, 2.5))
+            
+            sleep_time = random.uniform(1.5, 2.5)
+            log.info(f"iteration sleeping {sleep_time}")
+            time.sleep(sleep_time)
 
 
         except Exception as e:
             log.info(e)
             log.info("cannot apply to this job")
+            a = 1/0 # crash container to debug this better
             raise (e)
 
         return submitted
@@ -454,6 +504,11 @@ class EasyApplyBot:
         return page
 
     def avoid_lock(self) -> None:
+        # TODO make this click on part of the page that isnt useful to avoid lock
+        log.info("avoiding lock")
+        #self.browser.ActionChains(driver).send_keys(Keys.ESCAPE).perform()
+        #self.browser.ActionChains(self.browser).send_keys(Keys.ESCAPE).perform()
+        """
         x, _ = pyautogui.position()
         pyautogui.moveTo(x + 200, pyautogui.position().y, duration=1.0)
         pyautogui.moveTo(x, pyautogui.position().y, duration=0.5)
@@ -462,6 +517,7 @@ class EasyApplyBot:
         pyautogui.keyUp('ctrl')
         time.sleep(0.5)
         pyautogui.press('esc')
+        """
 
     def next_jobs_page(self, position, location, jobs_per_page):
         self.browser.get(
@@ -517,4 +573,6 @@ if __name__ == '__main__':
 
     locations: list = [l for l in parameters['locations'] if l != None]
     positions: list = [p for p in parameters['positions'] if p != None]
+    
+    
     bot.start_apply(positions, locations)
